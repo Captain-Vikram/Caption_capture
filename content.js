@@ -343,6 +343,49 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         saveTranscriptToStorage();
         sendResponse({ success: true });
         return true;
+    } else if (request.action === 'downloadTranscript') {
+        // Handle downloading transcript
+        const meetingId = getMeetingId();
+        chrome.storage.local.get([`transcript_${meetingId}`], (result) => {
+            const transcriptData = result[`transcript_${meetingId}`] || [];
+            if (transcriptData.length > 0) {
+                // Get meeting metadata
+                const meetingTitle = document.querySelector('div[data-meeting-title]')?.innerText || 'Google Meet';
+                const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+                // Create header with metadata
+                const header = [
+                    `Meeting: ${meetingTitle}`,
+                    `Date: ${date}`,
+                    `Meeting ID: ${meetingId}`,
+                    `Number of entries: ${transcriptData.length}`,
+                    '-------------------------------------------',
+                    ''
+                ].join('\n');
+
+                // Combine header with transcript
+                const content = header + transcriptData.join('\n');
+
+                // Create downloadable blob
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+
+                // Send the blob URL to the background script for download
+                chrome.runtime.sendMessage({ 
+                    action: "download",
+                    url: url
+                }, (response) => {
+                    if (response && response.success) {
+                        console.log("Download initiated successfully");
+                    } else {
+                        console.error("Download failed:", response?.error);
+                    }
+                });
+            } else {
+                sendResponse({ url: null });
+            }
+        });
+        return true; // Keep the messaging channel open
     }
 });
 

@@ -127,13 +127,19 @@ function stopCapturing() {
 
 // Download the transcript
 function downloadTranscript() {
-    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'downloadTranscript' }, response => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'downloadTranscript' }, (response) => {
             if (response && response.url) {
-                chrome.downloads.download({
-                    url: response.url,
-                    filename: response.filename || 'transcript.txt',
-                    saveAs: true
+                // Send the blob URL to the background script for download
+                chrome.runtime.sendMessage({ 
+                    action: "download",
+                    url: response.url
+                }, (downloadResponse) => {
+                    if (downloadResponse && downloadResponse.success) {
+                        console.log("Download initiated successfully");
+                    } else {
+                        console.error("Download failed:", downloadResponse?.error);
+                    }
                 });
             } else {
                 document.getElementById('status').textContent = 'No transcript available to download.';
