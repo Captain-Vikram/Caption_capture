@@ -1,20 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Google Meet Captions & Participants Logger",
+  "name": "Simple Google Meet Captions Saver",
   "version": "1.0",
-  "description": "Captures Google Meet captions and participant names and saves them.",
-  "permissions": ["activeTab", "scripting", "downloads"],
-  "host_permissions": ["https://meet.google.com/*"],
-  "background": {
-    "service_worker": "background.js"
-  },
+  "description": "Saves Google Meet captions to a text file.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "storage"
+  ],
   "action": {
     "default_popup": "popup.html",
-    "default_icon": {
-      "16": "VLogo.png",
-      "48": "VLogo.png",
-      "128": "VLogo.png"
-    }
+    "default_icon": "icon.png"
   },
   "content_scripts": [
     {
@@ -23,4 +20,3 @@
     }
   ]
 }
-  

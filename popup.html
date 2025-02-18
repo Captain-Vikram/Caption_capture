@@ -1,16 +1,169 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <title>Meet Captions Recorder</title>
+    <title>Google Meet Transcript</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 10px; text-align: center; }
-        button { margin: 5px; padding: 10px; font-size: 14px; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-width: 320px;
+            padding: 15px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        h1 {
+            font-size: 18px;
+            color: #1a73e8;
+            margin-top: 0;
+        }
+        .status {
+            padding: 10px;
+            background-color: #e8f0fe;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .record-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .record-controls button {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #start-btn {
+            background-color: #34a853;
+            color: white;
+        }
+        #start-btn:hover {
+            background-color: #2e7d32;
+        }
+        #start-btn:disabled {
+            background-color: #a5d6a7;
+            cursor: not-allowed;
+        }
+        #stop-btn {
+            background-color: #ea4335;
+            color: white;
+        }
+        #stop-btn:hover {
+            background-color: #c62828;
+        }
+        #stop-btn:disabled {
+            background-color: #ef9a9a;
+            cursor: not-allowed;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        #download, #clear {
+            width: 100%;
+            padding: 10px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #download {
+            background-color: #1a73e8;
+            color: white;
+        }
+        #download:hover {
+            background-color: #0d47a1;
+        }
+        #download:disabled {
+            background-color: #bbdefb;
+            cursor: not-allowed;
+        }
+        #clear {
+            background-color: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        #clear:hover {
+            background-color: #e0e0e0;
+        }
+        #clear:disabled {
+            color: #999;
+            cursor: not-allowed;
+        }
+        .meeting-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            color: #c62828;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .recording-indicator.active {
+            display: flex;
+        }
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #c62828;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .footer {
+            margin-top: 15px;
+            font-size: 11px;
+            color: #999;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
-    <h3>Google Meet Captions Logger</h3>
-    <button id="start">Start Recording</button>
-    <button id="stop">Stop & Download</button>
+    <div class="container">
+        <h1>Google Meet Transcript</h1>
+        
+        <div id="recording-indicator" class="recording-indicator">
+            <div class="recording-dot"></div>
+            <span>Recording in progress</span>
+        </div>
+        
+        <div id="status" class="status">
+            Checking transcript status...
+        </div>
+        
+        <div class="record-controls">
+            <button id="start-btn">Start Capturing</button>
+            <button id="stop-btn" disabled>Stop Capturing</button>
+        </div>
+        
+        <div class="action-buttons">
+            <button id="download" disabled>Download Transcript</button>
+            <button id="clear" disabled>Clear Transcript</button>
+        </div>
+        
+        <div id="meeting-info" class="meeting-info"></div>
+        
+        <div class="footer">
+            Transcripts are saved while meeting is active
+        </div>
+    </div>
+    
     <script src="popup.js"></script>
 </body>
 </html>
