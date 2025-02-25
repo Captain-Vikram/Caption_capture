@@ -6,23 +6,23 @@ let isCapturing = false; // Flag to track if we're actively capturing
 let captionObserver = null; // Store the observer for later use
 
 // Function to process and store new captions with timestamps
+let lastCaptureTime = 0; // Store the last capture timestamp
+
 function processCaption(text, speakerName = null) {
-    // Only process if we're actively capturing
     if (!isCapturing) return;
 
     const now = new Date();
     const timestamp = now.toISOString();
     const formattedTime = now.toLocaleTimeString();
+    const currentTime = now.getTime(); // Get time in milliseconds
 
-    // Avoid duplicate captions
-    if (text === lastCaptionText && (now - lastTimestamp) < 2000) {
+    // Capture only if 10 seconds have passed since the last entry
+    if (currentTime - lastCaptureTime < 5000) { // 5,000 ms = 5 seconds
         return;
     }
 
-    lastCaptionText = text;
-    lastTimestamp = now;
+    lastCaptureTime = currentTime; // Update the last capture time
 
-    // Format with speaker name if available
     const captionEntry = speakerName
         ? `[${formattedTime}] ${speakerName}: ${text}`
         : `[${formattedTime}] ${text}`;
@@ -30,7 +30,6 @@ function processCaption(text, speakerName = null) {
     transcript.push(captionEntry);
     console.log('Transcript entry:', captionEntry);
 
-    // Save to chrome.storage periodically
     if (transcript.length % 10 === 0) {
         saveTranscriptToStorage();
     }
@@ -94,6 +93,21 @@ function findCaptionContainer() {
 
     console.warn('No caption container found');
     return null;
+}
+
+let lastCaption = '';
+
+function captureCaption() {
+    const captionContainer = document.querySelector('.caption-container-selector'); // Update with the actual selector
+    if (captionContainer) {
+        const currentCaption = captionContainer.innerText.trim();
+        if (currentCaption && currentCaption !== lastCaption) {
+            const timestamp = new Date().toLocaleTimeString();
+            const transcriptEntry = `[${timestamp}] You: ${currentCaption}`;
+            saveTranscript(transcriptEntry);
+            lastCaption = currentCaption;
+        }
+    }
 }
 
 // Extract speaker name if available
