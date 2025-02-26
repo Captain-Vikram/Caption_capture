@@ -5,36 +5,43 @@ let lastTimestamp = null;
 let isCapturing = false; // Flag to track if we're actively capturing
 let captionObserver = null; // Store the observer for later use
 
-// Function to process and store new captions with timestamps
-let lastCaptureTime = 0; // Store the last capture timestamp
+// Previous partial caption text for comparison
+
+let lastLoggedCaption = '';
+let debounceTimer = null;
+const DEBOUNCE_DELAY = 1500; // 1.5 seconds
 
 function processCaption(text, speakerName = null) {
     if (!isCapturing) return;
 
-    const now = new Date();
-    const timestamp = now.toISOString();
-    const formattedTime = now.toLocaleTimeString();
-    const currentTime = now.getTime(); // Get time in milliseconds
+    // Only log if text has a significant change or ends with a punctuation mark
+    if (text === lastLoggedCaption) return;
+    if (!isSignificantChange(lastLoggedCaption, text)) return;
 
-    // Capture only if 10 seconds have passed since the last entry
-    if (currentTime - lastCaptureTime < 5000) { // 5,000 ms = 5 seconds
-        return;
-    }
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        const now = new Date();
+        const formattedTime = now.toLocaleTimeString();
+        const captionEntry = speakerName && speakerName !== "You"
+            ? `[${formattedTime}] ${speakerName}: ${text.trim()}`
+            : `[${formattedTime}] You: ${text.trim()}`;
 
-    lastCaptureTime = currentTime; // Update the last capture time
-
-    const captionEntry = speakerName
-        ? `[${formattedTime}] ${speakerName}: ${text}`
-        : `[${formattedTime}] ${text}`;
-
-    transcript.push(captionEntry);
-    console.log('Transcript entry:', captionEntry);
-
-    if (transcript.length % 10 === 0) {
-        saveTranscriptToStorage();
-    }
+        transcript.push(captionEntry);
+        lastLoggedCaption = text;
+        console.log('Logged caption:', captionEntry);
+        // Optionally, save transcript after every 10 entries or so
+        if (transcript.length % 10 === 0) {
+            saveTranscriptToStorage();
+        }
+    }, DEBOUNCE_DELAY);
 }
 
+function isSignificantChange(oldText, newText) {
+    // Consider it significant if newText is longer and ends with a punctuation indicating completion
+    const diff = newText.length - oldText.length;
+    const sentenceComplete = /[.!?]$/.test(newText.trim());
+    return diff > 3 || sentenceComplete;
+}
 // Save transcript to chrome.storage
 function saveTranscriptToStorage() {
     const meetingId = getMeetingId();
@@ -96,38 +103,51 @@ function findCaptionContainer() {
 }
 
 let lastCaption = '';
-
 function captureCaption() {
-    const captionContainer = document.querySelector('.caption-container-selector'); // Update with the actual selector
+    // Use the same container finder we use elsewhere
+    const captionContainer = findCaptionContainer();
     if (captionContainer) {
         const currentCaption = captionContainer.innerText.trim();
         if (currentCaption && currentCaption !== lastCaption) {
             const timestamp = new Date().toLocaleTimeString();
-            const transcriptEntry = `[${timestamp}] You: ${currentCaption}`;
-            saveTranscript(transcriptEntry);
+            const speakerName = extractSpeakerName(captionContainer);
+            const transcriptEntry = speakerName 
+                ? `[${timestamp}] ${speakerName}: ${currentCaption}`
+                : `[${timestamp}] Unknown: ${currentCaption}`;
+            
+            transcript.push(transcriptEntry);
             lastCaption = currentCaption;
         }
     }
 }
-
 // Extract speaker name if available
 function extractSpeakerName(element) {
-    const speakerElement = element.querySelector('.KcIKyf') ||
-        element.querySelector('[data-sender-name]') ||
-        element.querySelector('[data-self-name]');
+    const speakerSelectors = [
+        '.KcIKyf',
+        '[data-sender-name]',
+        '[data-self-name]',
+        '.zWfAib',
+        '.NnTWjc',
+        '.participant-name', // new selector for participant names
+        'span[aria-label]'   // check aria-label attributes too
+    ];
 
-    if (speakerElement) {
-        return speakerElement.innerText ||
-            speakerElement.getAttribute('data-sender-name') ||
-            speakerElement.getAttribute('data-self-name');
+    for (const selector of speakerSelectors) {
+        const speakerElement = element.querySelector(selector);
+        if (speakerElement) {
+            const name = speakerElement.innerText || 
+                         speakerElement.getAttribute('data-sender-name') ||
+                         speakerElement.getAttribute('data-self-name') ||
+                         speakerElement.getAttribute('aria-label');
+            if (name && name.trim().length > 0) return name.trim();
+        }
     }
 
-    // Look for the img alt text which might contain name information
+    // Additional fallback: try to find img alt text if available
     const imgElement = element.querySelector('img[alt]');
-    if (imgElement && imgElement.alt) {
-        return imgElement.alt;
+    if (imgElement && imgElement.alt && !imgElement.alt.toLowerCase().includes('profile')) {
+        return imgElement.alt.trim();
     }
-
     return null;
 }
 
@@ -224,20 +244,28 @@ function enableCaptions() {
     for (const selector of captionSelectors) {
         const captionButton = document.querySelector(selector);
         if (captionButton) {
-            // Check if captions are already enabled
+            // Check if captions are not already enabled
             if (captionButton.getAttribute('aria-pressed') === 'false') {
                 captionButton.click();
-                console.log('Captions enabled');
+                console.log('Attempting to enable captions.');
+                // Wait and verify if captions appear
+                setTimeout(() => {
+                    const captionContainer = findCaptionContainer();
+                    if (!captionContainer || captionContainer.innerText.trim() === "") {
+                        console.warn('Captions not detected. Retrying...');
+                        captionButton.click();
+                    } else {
+                        console.log('Captions are active.');
+                    }
+                }, 2000); // check after 2 seconds
             } else {
-                console.log('Captions are already enabled');
+                console.log('Captions are already enabled.');
             }
             return;
         }
     }
-
-    console.log('Caption button not found');
+    console.warn('Caption button not found.');
 }
-
 // Wait until the user has entered the meeting
 function waitForMeeting() {
     console.log('Waiting for meeting to start...');
@@ -308,40 +336,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, isCapturing: isCapturing });
         return true;
 
-    } else if (request.action === 'downloadTranscript') {
-        chrome.storage.local.get([`transcript_${meetingId}`], (result) => {
-            const transcriptData = result[`transcript_${meetingId}`] || [];
-            if (transcriptData.length > 0) {
-                // Get meeting metadata
-                const meetingTitle = document.querySelector('div[data-meeting-title]')?.innerText || 'Google Meet';
-                const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    } // ... inside chrome.runtime.onMessage.addListener ...
+} else if (request.action === 'downloadTranscript') {
+    chrome.storage.local.get([`transcript_${meetingId}`], (result) => {
+        const transcriptData = result[`transcript_${meetingId}`] || [];
+        if (transcriptData.length > 0) {
+            // Get meeting metadata
+            const meetingTitle = document.querySelector('div[data-meeting-title]')?.innerText || 'Google Meet';
+            const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-                // Create header with metadata
-                const header = [
-                    `Meeting: ${meetingTitle}`,
-                    `Date: ${date}`,
-                    `Meeting ID: ${meetingId}`,
-                    `Number of entries: ${transcriptData.length}`,
-                    '-------------------------------------------',
-                    ''
-                ].join('\n');
-
-                // Combine header with transcript
-                const content = header + transcriptData.join('\n');
-
-                // Create downloadable blob
-                const blob = new Blob([content], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-
-                sendResponse({
-                    url: url,
-                    filename: `${meetingTitle}_transcript_${date}.txt`
-                });
-            } else {
-                sendResponse({ url: null });
-            }
-        });
-        return true;
+            // Create header with metadata
+            const header = [
+                `Meeting: ${meetingTitle}`,
+                `Date: ${date}`,
+                `Meeting ID: ${meetingId}`, // include once only
+                `Number of entries: ${transcriptData.length}`,
+                '-------------------------------------------',
+                ''
+            ].join('\n');
 
     } else if (request.action === 'getTranscriptStatus') {
         sendResponse({
