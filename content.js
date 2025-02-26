@@ -54,6 +54,31 @@ function saveTranscriptToStorage() {
     });
 }
 
+// ... your existing code ...
+
+function waitForMeeting() {
+    console.log('Waiting for meeting to start...'); // Add this line
+
+    const checkInterval = setInterval(() => {
+        console.log('Checking if meeting has started...'); // Add this line
+        if (hasEnteredMeeting()) {
+            clearInterval(checkInterval);
+            console.log('User has entered the meeting'); // Add this line
+
+            // Load any existing transcript for this meeting
+            const meetingId = getMeetingId();
+            chrome.storage.local.get([
+                `transcript_${meetingId}`,
+                `isCapturing_${meetingId}`
+            ], (result) => {
+                // ... rest of your code ...
+            });
+        }
+    }, 1000); // Check every second
+}
+
+// ... your existing code ...
+
 // Get meeting ID from URL
 function getMeetingId() {
     const url = window.location.href;
@@ -336,42 +361,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, isCapturing: isCapturing });
         return true;
 
-    } // ... inside chrome.runtime.onMessage.addListener ...
-} else if (request.action === 'downloadTranscript') {
-    chrome.storage.local.get([`transcript_${meetingId}`], (result) => {
-        const transcriptData = result[`transcript_${meetingId}`] || [];
-        if (transcriptData.length > 0) {
-            // Get meeting metadata
-            const meetingTitle = document.querySelector('div[data-meeting-title]')?.innerText || 'Google Meet';
-            const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
-            // Create header with metadata
-            const header = [
-                `Meeting: ${meetingTitle}`,
-                `Date: ${date}`,
-                `Meeting ID: ${meetingId}`, // include once only
-                `Number of entries: ${transcriptData.length}`,
-                '-------------------------------------------',
-                ''
-            ].join('\n');
-
-    } else if (request.action === 'getTranscriptStatus') {
-        sendResponse({
-            count: transcript.length,
-            meetingId: meetingId,
-            isCapturing: isCapturing
-        });
-        return true;
-
-    } else if (request.action === 'clearTranscript') {
-        // Clear transcript but keep status
-        transcript = [];
-        saveTranscriptToStorage();
-        sendResponse({ success: true });
-        return true;
     } else if (request.action === 'downloadTranscript') {
-        // Handle downloading transcript
-        const meetingId = getMeetingId();
         chrome.storage.local.get([`transcript_${meetingId}`], (result) => {
             const transcriptData = result[`transcript_${meetingId}`] || [];
             if (transcriptData.length > 0) {
@@ -412,6 +402,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             }
         });
         return true; // Keep the messaging channel open
+
+    } else if (request.action === 'getTranscriptStatus') {
+        sendResponse({
+            count: transcript.length,
+            meetingId: meetingId,
+            isCapturing: isCapturing
+        });
+        return true;
+
+    } else if (request.action === 'clearTranscript') {
+        // Clear transcript but keep status
+        transcript = [];
+        saveTranscriptToStorage();
+        sendResponse({ success: true });
+        return true;
     }
 });
 
