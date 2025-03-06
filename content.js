@@ -36,6 +36,86 @@ function processCaption(text, speakerName = null) {
     }, DEBOUNCE_DELAY);
 }
 
+// Hide captions without reducing video size
+// ...existing code...
+
+// Make captions transparent and prevent them from affecting video size
+const style = document.createElement("style");
+style.textContent = `
+    /* Target the caption containers */
+    div[jsname="YSxPC"],
+    div[jsname="tgaKEf"],
+    .a4cQT.kV7vwc,
+    .DtJ7e,
+    .iOzk7,
+    .bYevke.wY1pdd,
+    .bh44bd.VbkSUe,
+    .iOzk7.XDPoIe {
+        /* Make fully transparent */
+        opacity: 0 !important;
+        
+        /* Ensure no space is taken */
+        position: absolute !important;
+        height: 0 !important;
+        
+        /* Keep the container in the DOM for our caption reading */
+        visibility: visible !important;
+        pointer-events: none !important;
+        
+        /* Force no impact on layout */
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+    }
+    
+    /* Target the container that might be shrinking the video */
+    .Ilv0id, /* Main flex container in Meet */
+    .vy3Fhe {
+        flex: 1 1 auto !important; /* Force the video container to expand */
+    }
+    
+    /* Force the video to be as large as possible */
+    .xvDRLd,  /* Video container */
+    [data-allocation-index] {
+        height: 100% !important;
+        max-height: none !important;
+        min-height: 100% !important;
+    }
+`;
+
+// Apply the style
+document.head.appendChild(style);
+
+// Function to ensure video container stays at full size
+function enforceFullSizeVideo() {
+    // Find the video container elements
+    const videoContainers = document.querySelectorAll('.xvDRLd, [data-allocation-index]');
+    
+    videoContainers.forEach(container => {
+        // Force container to take full available height
+        container.style.height = '100%';
+        container.style.maxHeight = 'none';
+        container.style.minHeight = '100%';
+        
+        // Remove any flex constraints
+        const parent = container.parentElement;
+        if (parent) {
+            parent.style.flex = '1 1 auto';
+        }
+    });
+    
+    // Find and adjust the caption container to prevent it from taking space
+    const captionContainers = document.querySelectorAll('div[jsname="YSxPC"], div[jsname="tgaKEf"], .a4cQT.kV7vwc');
+    captionContainers.forEach(container => {
+        container.style.height = '0';
+        container.style.position = 'absolute';
+        container.style.opacity = '0';
+    });
+}
+
+// Run the function periodically to ensure changes take effect
+setInterval(enforceFullSizeVideo, 2000);
+
 function isSignificantChange(oldText, newText) {
     // Consider it significant if newText is longer and ends with a punctuation indicating completion
     const diff = newText.length - oldText.length;
@@ -53,8 +133,6 @@ function saveTranscriptToStorage() {
         console.log('Saved transcript to storage');
     });
 }
-
-// ... your existing code ...
 
 function waitForMeeting() {
     console.log('Waiting for meeting to start...'); // Add this line
@@ -76,8 +154,6 @@ function waitForMeeting() {
         }
     }, 1000); // Check every second
 }
-
-// ... your existing code ...
 
 // Get meeting ID from URL
 function getMeetingId() {
@@ -416,6 +492,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         transcript = [];
         saveTranscriptToStorage();
         sendResponse({ success: true });
+        return true;
+
+    } else if (request.action === 'getTranscript') {
+        sendResponse({ transcript: transcript });
         return true;
     }
 });
