@@ -171,7 +171,7 @@ function clearTranscript() {
 }
 
 // Show analysis popup
-function showAnalysisPopup(analysis) {
+function showAnalysisPopup(score, review) {
     // Create popup elements
     const overlay = document.createElement('div');
     overlay.style.position = 'fixed';
@@ -193,15 +193,57 @@ function showAnalysisPopup(analysis) {
     popup.style.maxHeight = '80%';
     popup.style.overflow = 'auto';
     popup.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+    popup.style.resize = 'both'; // Add resize capability
 
     const title = document.createElement('h2');
     title.textContent = 'Transcript Analysis';
     title.style.color = '#1a73e8';
     title.style.marginTop = '0';
 
-    const content = document.createElement('div');
-    content.innerHTML = analysis.replace(/\n/g, '<br>');
-    content.style.marginBottom = '20px';
+    // Score section
+    const scoreSection = document.createElement('div');
+    scoreSection.style.marginBottom = '15px';
+    
+    const scoreTitle = document.createElement('h3');
+    scoreTitle.textContent = 'Score:';
+    scoreTitle.style.marginBottom = '5px';
+    
+    const scoreValue = document.createElement('div');
+    scoreValue.textContent = `${score} / 10`;
+    scoreValue.style.fontSize = '18px';
+    scoreValue.style.fontWeight = 'bold';
+    
+    scoreSection.appendChild(scoreTitle);
+    scoreSection.appendChild(scoreValue);
+
+    // Review section
+    const reviewSection = document.createElement('div');
+    reviewSection.style.marginBottom = '20px';
+    
+    const reviewTitle = document.createElement('h3');
+    reviewTitle.textContent = 'Review:';
+    reviewTitle.style.marginBottom = '5px';
+    
+    const reviewContent = document.createElement('div');
+    
+    // Convert review to bullet points
+    const bulletList = document.createElement('ul');
+    bulletList.style.paddingLeft = '20px';
+    
+    // Split review into sentences
+    const sentences = review.split(/\.\s+/).filter(sentence => sentence.trim().length > 0);
+    sentences.forEach(sentence => {
+        if (sentence.trim()) {
+            const listItem = document.createElement('li');
+            listItem.textContent = sentence.trim() + '.';
+            listItem.style.marginBottom = '5px';
+            bulletList.appendChild(listItem);
+        }
+    });
+    
+    reviewContent.appendChild(bulletList);
+    reviewSection.appendChild(reviewTitle);
+    reviewSection.appendChild(reviewContent);
 
     const closeButton = document.createElement('button');
     closeButton.textContent = 'Close';
@@ -214,13 +256,69 @@ function showAnalysisPopup(analysis) {
 
     // Assemble popup
     popup.appendChild(title);
-    popup.appendChild(content);
+    popup.appendChild(scoreSection);
+    popup.appendChild(reviewSection);
     popup.appendChild(closeButton);
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
+    
+    // Make popup draggable
+    makeDraggable(popup);
 }
 
-// Analyze the transcript
+// Add draggable functionality to the popup
+function makeDraggable(element) {
+    let isDragging = false;
+    let offsetX, offsetY;
+    
+    // Create drag handle at the top of the popup
+    const dragHandle = document.createElement('div');
+    dragHandle.style.position = 'relative';
+    dragHandle.style.height = '10px';
+    dragHandle.style.margin = '-15px -15px 15px -15px';
+    dragHandle.style.cursor = 'move';
+    dragHandle.style.backgroundColor = '#f1f1f1';
+    dragHandle.style.borderRadius = '8px 8px 0 0';
+    dragHandle.style.padding = '5px';
+    
+    // Insert the drag handle at the beginning of the popup
+    element.insertBefore(dragHandle, element.firstChild);
+    
+    dragHandle.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        
+        // Get the initial mouse position and element position
+        const rect = element.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        
+        // Prevent text selection during drag
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        // Calculate the new position
+        const parentRect = element.parentElement.getBoundingClientRect();
+        let newLeft = e.clientX - offsetX - parentRect.left;
+        let newTop = e.clientY - offsetY - parentRect.top;
+        
+        // Apply constraints to keep within the overlay
+        newLeft = Math.max(0, Math.min(newLeft, parentRect.width - element.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, parentRect.height - element.offsetHeight));
+        
+        // Update position
+        element.style.position = 'absolute';
+        element.style.left = newLeft + 'px';
+        element.style.top = newTop + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+}
+
 function analyzeTranscript() {
     // Disable the analyze button and update status to show processing
     const analyzeButton = document.getElementById('analyze');
@@ -232,8 +330,7 @@ function analyzeTranscript() {
         chrome.tabs.sendMessage(tabs[0].id, { action: 'getTranscript' }, (response) => {
             if (response && response.transcript && response.transcript.length > 0) {
                 const speechText = response.transcript.join('\n');
-                const additionalPrompt = "Provide a detailed analysis of this meeting transcript. Include key topics discussed, action items identified, and an overall summary.";
-
+                
                 // Loading indicator in status
                 statusElement.textContent = 'Sending to analysis server...';
                 
@@ -242,7 +339,7 @@ function analyzeTranscript() {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ speech_text: speechText, additional_prompt: additionalPrompt })
+                    body: JSON.stringify({ speech_text: speechText})
                 })
                 .then(res => res.json())
                 .then(data => {
@@ -251,7 +348,9 @@ function analyzeTranscript() {
                     }
                     analyzeButton.disabled = false;
                     statusElement.textContent = 'Analysis complete!';
-                    showAnalysisPopup(data.analysis || `Analysis Score: ${data.score}`);
+                    
+                    // Show both score and review in the popup
+                    showAnalysisPopup(data.score, data.review);
                 })
                 .catch(error => {
                     console.error('Error analyzing transcript:', error);
