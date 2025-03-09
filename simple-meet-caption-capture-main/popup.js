@@ -8,6 +8,7 @@ function updateStatus() {
     const stopButton = document.getElementById('stop-btn');
     const meetingInfoElement = document.getElementById('meeting-info');
     const recordingIndicator = document.getElementById('recording-indicator');
+    const sessionId = localStorage.getItem('sessionId'); // Get session ID for conditional button enabling
 
     // Query the active tab
     chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
@@ -45,7 +46,8 @@ function updateStatus() {
                     if (response.count > 0) {
                         downloadButton.disabled = false;
                         clearButton.disabled = false;
-                        analyzeButton.disabled = false; // Enable analyze button when transcript is available
+                        // Only enable analyze button if both transcript exists AND session ID exists
+                        analyzeButton.disabled = !(response.count > 0 && sessionId);
 
                         // Update status message
                         if (response.isCapturing) {
@@ -319,6 +321,7 @@ function makeDraggable(element) {
     });
 }
 
+// Analyze the transcript
 function analyzeTranscript() {
     // Disable the analyze button and update status to show processing
     const analyzeButton = document.getElementById('analyze');
@@ -331,32 +334,36 @@ function analyzeTranscript() {
             if (response && response.transcript && response.transcript.length > 0) {
                 const speechText = response.transcript.join('\n');
                 
-                // Loading indicator in status
-                statusElement.textContent = 'Sending to analysis server...';
-                
-                fetch('http://127.0.0.1:5000/analyze', {
+                const sessionId = localStorage.getItem('sessionId'); // Retrieve session ID from localStorage
+                if (!sessionId) {
+                    statusElement.textContent = 'No session ID found. Please save a session ID first.';
+                    analyzeButton.disabled = false;
+                    return;
+                }
+
+                fetch('http://localhost:5000/analyze_to_server', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ speech_text: speechText})
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        speech_text: speechText
+                    })
                 })
                 .then(res => res.json())
                 .then(data => {
                     if (!data || data.error) {
                         throw new Error(data.error || "Invalid response from server");
                     }
+                    statusElement.textContent = 'Analysis sent to server successfully!';
                     analyzeButton.disabled = false;
-                    statusElement.textContent = 'Analysis complete!';
-                    
-                    // Show both score and review in the popup
-                    showAnalysisPopup(data.score, data.review);
                 })
                 .catch(error => {
-                    console.error('Error analyzing transcript:', error);
-                    statusElement.textContent = 'Error analyzing transcript.';
+                    console.error('Error sending transcript to server:', error);
+                    statusElement.textContent = 'Error sending analysis to server.';
                     analyzeButton.disabled = false;
-                    alert('Analysis failed: ' + error.message);
+                    alert('Failed to send analysis: ' + error.message);
                 });
             } else {
                 statusElement.textContent = 'No transcript available to analyze.';
@@ -365,6 +372,47 @@ function analyzeTranscript() {
         });
     });
 }
+
+// DOM Elements
+const sessionIdInput = document.getElementById('session-id');
+const saveSessionBtn = document.getElementById('save-session-btn');
+const meetingInfo = document.getElementById('meeting-info');
+
+// Save session ID to localStorage and the server
+saveSessionBtn.addEventListener('click', async () => {
+    const sessionId = sessionIdInput.value.trim();
+    if (!sessionId) {
+        meetingInfo.textContent = 'Please enter a valid Session ID.';
+        return;
+    }
+
+    // Save to localStorage first
+    localStorage.setItem('sessionId', sessionId);
+
+    try {
+        // Send session ID to the server
+        const response = await fetch('http://127.0.0.1:5000/session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ session_id: sessionId }),
+        });
+
+        const result = await response.json();
+        if (response.ok) {
+            meetingInfo.textContent = `Session ID saved: ${sessionId}`;
+            console.log(`Folder created at: ${result.folder_path}`);
+            // After saving session ID, update status to enable/disable buttons appropriately
+            updateStatus();
+        } else {
+            meetingInfo.textContent = `Error: ${result.error}`;
+        }
+    } catch (error) {
+        meetingInfo.textContent = 'Failed to save session ID to the server.';
+        console.error(error);
+    }
+});
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', () => {
